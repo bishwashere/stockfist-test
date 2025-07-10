@@ -4,7 +4,7 @@ import { Chessboard, type PieceDropHandlerArgs } from 'react-chessboard';
 import { useStockfish } from './hooks/useStockfish';
 const App = () => {
   // create a chess game using a ref to always have access to the latest game state within closures and maintain the game state across renders
-  const chessGameRef = useRef(new Chess("r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4"));
+  const chessGameRef = useRef(new Chess("r1bq1rk1/pp1n1ppp/2pbpn2/3p4/3P1B2/2N1PN2/PPQ2PPP/R2K1B1R w KQ - 0 9"));
   const chessGame = chessGameRef.current;
   const [moveableSquares, setMoveableSquares] = useState<Record<Square, Square[]>>({});
 
