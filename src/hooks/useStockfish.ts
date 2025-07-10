@@ -74,7 +74,7 @@ export function useStockfish(engineFile = "stockfish-nnue-16-single.js") {
 
               score = score / 100;
               engine.removeEventListener("message", onMessage);
-              resolve(-score); // Invert so it's always from White's perspective
+              resolve(-score);
             }
 
             if (data.startsWith("bestmove") && !resolved) {
@@ -93,7 +93,6 @@ export function useStockfish(engineFile = "stockfish-nnue-16-single.js") {
       });
     };
 
-    // Step 1: Evaluate initial position
     const initialScore = await evaluatePosition(fen);
 
     for (const move of moves) {
@@ -109,41 +108,37 @@ export function useStockfish(engineFile = "stockfish-nnue-16-single.js") {
 
       try {
         const newScore = await evaluatePosition(newFen);
-
-        // Calculate score difference
         const scoreDiff = newScore - initialScore;
 
         if (!results[from]) results[from] = [];
         results[from].push({ square: to, score: scoreDiff });
       } catch {
-        // Skip errors silently
+        // Skip
       }
     }
 
-    // Find overall best move by score difference
-    let overallBestScore = -Infinity;
-    let overallBestFrom = "";
-    let overallBestTo = "";
-    let overallBestFen = "";
-
-    for (const [from, moves] of Object.entries(results)) {
-      for (const { square: to, score } of moves) {
-        if (score > overallBestScore) {
-          overallBestScore = score;
-          overallBestFrom = from;
-          overallBestTo = to;
-
-          const gameCopy = new Chess(fen);
-          gameCopy.move({ from, to, promotion: "q" });
-          overallBestFen = gameCopy.fen();
+    // Find max score before replacing
+    let maxScore = -Infinity;
+    for (const moveList of Object.values(results)) {
+      for (const move of moveList) {
+        if (move.score > maxScore) {
+          maxScore = move.score;
         }
       }
     }
 
-    console.log(`✅ Current FEN: ${fen}`);
-    console.log(`✅ Best move: ${overallBestFrom} → ${overallBestTo}`);
-    console.log(`✅ Score difference for best move: ${overallBestScore}`);
-    console.log(`✅ Best move FEN: ${overallBestFen}`);
+    // Call Stockfish getBestMove and replace score
+    const bestMoveUci = await getBestMove(fen, depth);
+    const bestFrom = bestMoveUci.slice(0, 2);
+    const bestTo = bestMoveUci.slice(2, 4);
+
+    if (results[bestFrom]) {
+      const moveArray = results[bestFrom];
+      const targetMove = moveArray.find(m => m.square === bestTo);
+      if (targetMove) {
+        targetMove.score = maxScore + 0.10;
+      }
+    }
 
     return results;
   };
