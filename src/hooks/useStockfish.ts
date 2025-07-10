@@ -1,4 +1,3 @@
-// src/hooks/useStockfish.ts
 import { useEffect, useRef } from "react";
 import { Chess } from "chess.js";
 
@@ -17,8 +16,7 @@ export function useStockfish(engineFile = "stockfish-nnue-16-single.js") {
     };
   }, [engineFile]);
 
-  // Get best move from Stockfish for a given position
-  const getBestMove = (fen: string, depth = 12): Promise<string> => {
+  const getBestMove = (fen: string, depth = 25): Promise<string> => {
     return new Promise((resolve) => {
       if (!engineRef.current) throw new Error("Engine not initialized");
 
@@ -38,20 +36,14 @@ export function useStockfish(engineFile = "stockfish-nnue-16-single.js") {
     });
   };
 
-  // Evaluate all possible moves from current fen with score
-  // Returns object: { [fromSquare]: [{ square: toSquare, score: number }] }
   const evaluateAllMoves = async (
     fen: string,
-    depth = 31
+    depth = 25
   ): Promise<Record<string, { square: string; score: number }[]>> => {
     if (!engineRef.current) throw new Error("Engine not initialized");
 
-    console.log("[evaluateAllMoves] Starting with FEN:", fen);
-
     const chess = new Chess(fen);
     const moves = chess.moves({ verbose: true });
-
-    console.log("[evaluateAllMoves] Total legal moves:", moves.length);
 
     const results: Record<string, { square: string; score: number }[]> = {};
 
@@ -66,7 +58,7 @@ export function useStockfish(engineFile = "stockfish-nnue-16-single.js") {
             engine.removeEventListener("message", onMessage);
             reject(new Error("Evaluation timeout"));
           }
-        }, 10000); // 10 second timeout
+        }, 30000);
 
         const onMessage = (msg: MessageEvent) => {
           const data = msg.data;
@@ -80,16 +72,16 @@ export function useStockfish(engineFile = "stockfish-nnue-16-single.js") {
               let score = parseInt(val, 10);
               if (type === "mate") score = score > 0 ? 100000 : -100000;
 
+              score = score / 100;
               engine.removeEventListener("message", onMessage);
-              engine.postMessage("stop");
-              resolve(score);
+              resolve(-score); // Invert so it's always from White's perspective
             }
 
             if (data.startsWith("bestmove") && !resolved) {
               resolved = true;
               clearTimeout(timeout);
               engine.removeEventListener("message", onMessage);
-              resolve(0); // Default score if no evaluation found
+              resolve(0);
             }
           }
         };
@@ -101,8 +93,9 @@ export function useStockfish(engineFile = "stockfish-nnue-16-single.js") {
       });
     };
 
-    // Process all moves sequentially and wait for each to complete
-    let processedCount = 0;
+    // Step 1: Evaluate initial position
+    const initialScore = await evaluatePosition(fen);
+
     for (const move of moves) {
       const from = move.from;
       const to = move.to;
@@ -110,44 +103,47 @@ export function useStockfish(engineFile = "stockfish-nnue-16-single.js") {
       const gameCopy = new Chess(fen);
       const moveResult = gameCopy.move({ from, to, promotion: "q" });
 
-      if (!moveResult) {
-        console.warn(
-          `[evaluateAllMoves] ❌ Invalid move skipped: ${from} → ${to}`
-        );
-        continue;
-      }
+      if (!moveResult) continue;
 
       const newFen = gameCopy.fen();
-      console.log(
-        `[evaluateAllMoves] Trying move: ${from} → ${to} (${
-          processedCount + 1
-        }/${moves.length})`
-      );
 
       try {
-        const score = await evaluatePosition(newFen);
-        console.log(
-          `[evaluateAllMoves] ✅ Score for ${from} → ${to}: ${score}`
-        );
+        const newScore = await evaluatePosition(newFen);
+
+        // Calculate score difference
+        const scoreDiff = newScore - initialScore;
 
         if (!results[from]) results[from] = [];
-        results[from].push({ square: to, score });
-        processedCount++;
-      } catch (error) {
-        console.error(
-          `[evaluateAllMoves] ❌ Error evaluating ${from} → ${to}:`,
-          error
-        );
+        results[from].push({ square: to, score: scoreDiff });
+      } catch {
+        // Skip errors silently
       }
     }
 
-    console.log(
-      `[evaluateAllMoves] 🎉 ALL EVALUATIONS COMPLETE! Processed ${processedCount} moves.`
-    );
-    console.log(
-      "[evaluateAllMoves] ✅ Final Evaluated Moves:\n",
-      JSON.stringify(results, null, 2)
-    );
+    // Find overall best move by score difference
+    let overallBestScore = -Infinity;
+    let overallBestFrom = "";
+    let overallBestTo = "";
+    let overallBestFen = "";
+
+    for (const [from, moves] of Object.entries(results)) {
+      for (const { square: to, score } of moves) {
+        if (score > overallBestScore) {
+          overallBestScore = score;
+          overallBestFrom = from;
+          overallBestTo = to;
+
+          const gameCopy = new Chess(fen);
+          gameCopy.move({ from, to, promotion: "q" });
+          overallBestFen = gameCopy.fen();
+        }
+      }
+    }
+
+    console.log(`✅ Current FEN: ${fen}`);
+    console.log(`✅ Best move: ${overallBestFrom} → ${overallBestTo}`);
+    console.log(`✅ Score difference for best move: ${overallBestScore}`);
+    console.log(`✅ Best move FEN: ${overallBestFen}`);
 
     return results;
   };

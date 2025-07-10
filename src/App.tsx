@@ -4,7 +4,7 @@ import { Chessboard, type PieceDropHandlerArgs } from 'react-chessboard';
 import { useStockfish } from './hooks/useStockfish';
 const App = () => {
   // create a chess game using a ref to always have access to the latest game state within closures and maintain the game state across renders
-  const chessGameRef = useRef(new Chess("rnbqkb1r/pppp1ppp/5n2/4p3/2B1P3/3P1N2/PPP2PPP/RNBQK2R b KQkq - 0 4"));
+  const chessGameRef = useRef(new Chess("r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4"));
   const chessGame = chessGameRef.current;
   const [moveableSquares, setMoveableSquares] = useState<Record<Square, Square[]>>({});
 
@@ -52,18 +52,18 @@ const App = () => {
    * Handle square click to select piece and show move scores
    */
   const onSquareClick = (squareData: any) => {
-    console.log('Square clicked:', squareData);
+//     console.log('Square clicked:', squareData);
 
     /** Extract square string from the click data */
     const square = typeof squareData === 'string' ? squareData : squareData?.square;
 
-    console.log('Extracted square:', square);
-    console.log('moveableSquares:', moveableSquares);
-    console.log('Current selectedPiece:', selectedPiece);
+//     console.log('Extracted square:', square);
+//     console.log('moveableSquares:', moveableSquares);
+//     console.log('Current selectedPiece:', selectedPiece);
 
     if (square && moveableSquares[square as Square] && moveableSquares[square as Square].length > 0) {
       const newSelectedPiece = selectedPiece === square ? null : (square as Square);
-      console.log('Setting selectedPiece to:', newSelectedPiece);
+//       console.log('Setting selectedPiece to:', newSelectedPiece);
       setSelectedPiece(newSelectedPiece);
     } else {
       console.log('Square has no moveable pieces, clearing selection');
@@ -104,72 +104,87 @@ const App = () => {
    * Generate score overlay grid
    */
   const renderScoreOverlay = () => {
-    console.log('renderScoreOverlay called - selectedPiece:', selectedPiece);
-    console.log('moveEvaluations:', moveEvaluations);
+//     console.log('renderScoreOverlay called - selectedPiece:', selectedPiece);
+//     console.log('moveEvaluations:', moveEvaluations);
 
     const squares = [];
     const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
     const ranks = ['8', '7', '6', '5', '4', '3', '2', '1'];
 
     if (!selectedPiece) {
-      /** Show best score for each piece when no piece is selected */
-      console.log('No piece selected - showing best scores for all pieces');
+      /** Prepare all best scores per piece */
+      const pieceBestMoves: { pieceSquare: string; score: number }[] = [];
 
-      Object.keys(moveableSquares).forEach(pieceSquare => {
+      Object.keys(moveEvaluations).forEach(pieceSquare => {
         const moves = moveEvaluations[pieceSquare];
         if (moves && moves.length > 0) {
-          /** Find the best (highest) score for this piece */
-          const bestScore = Math.max(...moves.map(move => move.score));
-
-          /** Get file and rank indices for positioning */
-          const file = files.indexOf(pieceSquare[0]);
-          const rank = ranks.indexOf(pieceSquare[1]);
-
-          if (file !== -1 && rank !== -1) {
-            squares.push(
-              <div
-                key={`best-${pieceSquare}`}
-                style={{
-                  position: 'absolute',
-                  left: `${file * 12.5}%`,
-                  top: `${rank * 12.5}%`,
-                  width: '12.5%',
-                  height: '12.5%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  pointerEvents: 'none',
-                  zIndex: 1000
-                }}
-              >
-                <div
-                  style={{
-                    backgroundColor: 'rgba(0, 100, 0, 0.9)',
-                    color: 'white',
-                    fontSize: '10px',
-                    padding: '1px 3px',
-                    borderRadius: '3px',
-                    fontWeight: 'bold',
-                    border: '1px solid rgba(255, 255, 255, 0.3)'
-                  }}
-                >
-                  {bestScore.toFixed(1)}
-                </div>
-              </div>
-            );
-          }
+          const bestScore = Math.max(...moves.map(m => m.score));
+          pieceBestMoves.push({ pieceSquare, score: bestScore });
         }
       });
-    } else {
+
+      /** Find overall best piece */
+      const overallBestScore = Math.max(...pieceBestMoves.map(p => p.score));
+
+      pieceBestMoves.forEach(({ pieceSquare, score }) => {
+        const file = files.indexOf(pieceSquare[0]);
+        const rank = ranks.indexOf(pieceSquare[1]);
+
+        if (file !== -1 && rank !== -1) {
+          const isOverallBest = score === overallBestScore;
+
+          squares.push(
+            <div
+              key={`best-${pieceSquare}`}
+              style={{
+                position: 'absolute',
+                left: `${file * 12.5}%`,
+                top: `${rank * 12.5}%`,
+                width: '12.5%',
+                height: '12.5%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                pointerEvents: 'none',
+                zIndex: 1000
+              }}
+            >
+              <div
+                style={{
+                  backgroundColor: isOverallBest ? 'blue' : 'rgba(0, 100, 0, 0.9)',
+                  color: 'white',
+                  fontSize: '10px',
+                  padding: '1px 3px',
+                  borderRadius: '3px',
+                  fontWeight: 'bold',
+                  border: '1px solid rgba(255, 255, 255, 0.3)'
+                }}
+              >
+                {score.toFixed(2)}
+              </div>
+            </div>
+          );
+        }
+      });
+    }
+ else {
       /** Show all move scores for selected piece */
-      console.log('Piece selected - showing all moves for:', selectedPiece);
+//       console.log('Piece selected - showing all moves for:', selectedPiece);
 
       if (moveEvaluations[selectedPiece]) {
-        moveEvaluations[selectedPiece].forEach(({ square: targetSquare, score }) => {
+        const moves = moveEvaluations[selectedPiece];
+
+        // Find best score
+        const bestScore = Math.max(...moves.map(m => m.score));
+
+        moves.forEach(({ square: targetSquare, score }) => {
           const file = files.indexOf(targetSquare[0]);
           const rank = ranks.indexOf(targetSquare[1]);
 
           if (file !== -1 && rank !== -1) {
+            // Check if this move is the best move
+            const isBest = score === bestScore;
+
             squares.push(
               <div
                 key={`move-${targetSquare}`}
@@ -188,7 +203,7 @@ const App = () => {
               >
                 <div
                   style={{
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    backgroundColor: isBest ? 'blue' : 'rgba(0, 0, 0, 0.8)',
                     color: 'white',
                     fontSize: '12px',
                     padding: '2px 4px',
@@ -196,13 +211,14 @@ const App = () => {
                     fontWeight: 'bold'
                   }}
                 >
-                  {score.toFixed(1)}
+                  {score.toFixed(2)}
                 </div>
               </div>
             );
           }
         });
       }
+
     }
 
     return (
@@ -254,7 +270,7 @@ const App = () => {
 
   useEffect(() => {
 
-    console.log("fen:", fen)
+//     console.log("fen:", fen)
 
     const fn = async () => {
       const moves = await evaluateAllMoves(chessGame.fen());
@@ -264,7 +280,7 @@ const App = () => {
       setMoveEvaluations(moves);
 
       const bestMove = await getBestMove(fen);
-      console.log("best move:", bestMove);
+//       console.log("best move:", bestMove);
     }
 
     fn();
@@ -285,7 +301,7 @@ const App = () => {
     }
 
     setMoveableSquares(currentPlayerMovableSquares);
-    console.log(`${chessGame.turn() === 'w' ? 'White' : 'Black'}'s movable pieces and destinations:`, currentPlayerMovableSquares);
+//     console.log(`${chessGame.turn() === 'w' ? 'White' : 'Black'}'s movable pieces and destinations:`, currentPlayerMovableSquares);
   }, [fen]);
 
   // render the chessboard
